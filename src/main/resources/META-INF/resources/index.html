@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Telio Maps POC</title>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+
+    <style>
+        body { margin:0; padding:0; }
+        #map { width: 100vw; height: 100vh; }
+        #infoBox {
+            position:absolute;
+            background:white;
+            padding:10px;
+            top:10px;
+            left:10px;
+            z-index:99;
+            border-radius:5px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="infoBox">
+    <strong>Telio Maps POC</strong><br>
+    Click en el mapa para seleccionar ORIGEN y DESTINO.<br>
+    Se enviará al backend para calcular la ruta. (LFBT)
+</div>
+
+<div id="map"></div>
+
+<script>
+    mapboxgl.accessToken = "pk.eyJ1IjoidGVsaW9yaWRlcyIsImEiOiJjbWZxdW11dngwMm90MmxwenU5emNhMHN0In0.g_d23QobmXqFyUElkDl5ag";
+
+    const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [-68.15, -16.50], // Bolivia
+        zoom: 13
+    });
+
+    let points = [];
+    let markers = [];
+
+    map.on("click", function (e) {
+        const { lng, lat } = e.lngLat;
+
+        // Resetear si ya seleccionó 2 puntos
+        if (points.length === 2) {
+            points = [];
+            markers.forEach(m => m.remove());
+            markers = [];
+
+            // Eliminar ruta si existe
+            if (map.getLayer("route")) map.removeLayer("route");
+            if (map.getSource("route")) map.removeSource("route");
+        }
+
+        let marker = new mapboxgl.Marker().setLngLat([lng, lat]).addTo(map);
+        markers.push(marker);
+
+        points.push({ lng: lng, lat: lat });
+
+        if (points.length === 2) {
+            fetchRoute(points[0], points[1]);
+        }
+    });
+
+    // 📌 ENVÍA FORMATO CORRECTO PARA EL BACKEND
+    function fetchRoute(origin, destination) {
+        fetch("/api/maps/route", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                coordinates: [
+                    { "lng": origin.lng, "lat": origin.lat },
+                    { "lng": destination.lng, "lat": destination.lat }
+                ]
+            })
+        })
+            .then(r => r.json())
+            .then(drawRoute)
+            .catch(console.error);
+    }
+
+    // 🗺️ DIBUJAR RUTA
+    function drawRoute(data) {
+        const poly = data.polyline;
+
+        if (!poly) {
+            alert("No se recibió polyline desde el backend");
+            return;
+        }
+
+        const geojson = polylineToGeoJSON(poly);
+
+        // Eliminar si existe
+        if (map.getLayer("route")) map.removeLayer("route");
+        if (map.getSource("route")) map.removeSource("route");
+
+        map.addSource("route", {
+            type: "geojson",
+            data: geojson
+        });
+
+        map.addLayer({
+            id: "route",
+            type: "line",
+            source: "route",
+            paint: {
+                "line-width": 5,
+                "line-color": "#FF0000"
+            }
+        });
+
+        alert(
+            "Distancia: " + data.miles.toFixed(2) + " millas\n" +
+            "Duración: " + data.minutes.toFixed(2) + " minutos"
+        );
+    }
+
+    // POLYLINE DECODER
+    function polylineToGeoJSON(encoded) {
+        const coords = decode(encoded);
+        return {
+            type: "Feature",
+            geometry: {
+                type: "LineString",
+                coordinates: coords
+            }
+        };
+    }
+
+    function decode(str, precision) {
+        precision = Math.pow(10, -(precision || 5));
+        let index = 0, lat = 0, lng = 0, coordinates = [];
+
+        while (index < str.length) {
+            let b, shift = 0, result = 0;
+            do {
+                b = str.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = str.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+            lng += dlng;
+
+            coordinates.push([lng * precision, lat * precision]);
+        }
+
+        return coordinates;
+    }
+</script>
+
+</body>
+</html>

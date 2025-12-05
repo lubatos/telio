@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificación Persona</title>
+
+    <!-- Persona JS -->
+    <script src="https://cdn.withpersona.com/dist/persona-v4.9.0.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 { color: #333; margin-bottom: 15px; font-size: 28px; }
+        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+
+        button {
+            padding: 14px 35px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+
+        button:hover:not(:disabled) { transform: translateY(-2px); }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+
+        .result-box {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result-box.success { background: #d4edda; color: #155724; display: block; }
+        .result-box.error { background: #f8d7da; color: #721c24; display: block; }
+        .result-box.info { background: #d1ecf1; color: #0c5460; display: block; }
+
+        .debug-panel {
+            margin-top: 30px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            text-align: left;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .debug-line.info { color: #17a2b8; }
+        .debug-line.success { color: #28a745; }
+        .debug-line.error { color: #dc3545; }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <h1>✅ Verificación de Identidad</h1>
+    <p class="subtitle">Verifica tu identidad de forma segura y rápida</p>
+
+    <button id="btnVerificar" onclick="iniciarVerificacion()">
+        Comenzar Verificación
+    </button>
+
+    <div class="status-message" id="statusMessage"></div>
+    <div class="result-box" id="resultBox"></div>
+
+    <div class="debug-panel">
+        <strong>🔍 Estado de Carga:</strong>
+        <div id="debugLog"></div>
+    </div>
+</div>
+
+
+<script>
+// ============================
+// CONFIGURACIÓN AL BACKEND
+// ============================
+const API_BASE = "http://localhost:8080/persona";
+let GLOBAL_INQUIRY_ID = null;
+
+
+// ============================
+// LOG DE DEPURACIÓN
+// ============================
+function addDebugLog(mensaje, tipo = 'info') {
+    const log = document.getElementById("debugLog");
+    const entry = document.createElement("div");
+    entry.className = `debug-line ${tipo}`;
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${mensaje}`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+
+    console.log(`[${tipo}] ${mensaje}`);
+}
+
+
+// ============================
+// FLUJO PRINCIPAL
+// ============================
+async function iniciarVerificacion() {
+    addDebugLog("Usuario solicitó iniciar verificación", "info");
+
+    const btn = document.getElementById("btnVerificar");
+    const statusMsg = document.getElementById("statusMessage");
+
+    btn.disabled = true;
+    statusMsg.textContent = "Solicitando inquiryId al backend...";
+
+    try {
+        // 1) LLAMAR A TU BACKEND → CREA INQUIRY EN PERSONA
+        const response = await fetch(`${API_BASE}/start`);
+        if (!response.ok) throw new Error("Backend no respondió correctamente");
+
+        const data = await response.json();
+        GLOBAL_INQUIRY_ID = data.inquiryId;
+
+        addDebugLog("Inquiry generado desde backend: " + GLOBAL_INQUIRY_ID, "success");
+
+        // 2) INICIAR PERSONA CON inquiryId
+        const client = new Persona.Client({
+            inquiryId: GLOBAL_INQUIRY_ID,
+            environment: "sandbox",
+
+            onReady: () => {
+                addDebugLog("Persona READY → abriendo modal", "success");
+                client.open();
+            },
+
+            onStart: () => {
+                addDebugLog("Persona inició verificación", "success");
+                statusMsg.textContent = "Verificación en proceso...";
+            },
+
+            onComplete: async () => {
+                addDebugLog("Persona completó el flujo", "success");
+                statusMsg.textContent = "";
+
+                // CONSULTAR RESULTADOS DESDE TU BACKEND
+                const statusRes = await fetch(`${API_BASE}/status/${GLOBAL_INQUIRY_ID}`);
+                const statusData = await statusRes.json();
+
+                mostrarResultadoDesdeBackend(statusData);
+            },
+
+            onCancel: () => {
+                addDebugLog("El usuario canceló la verificación", "error");
+                mostrarError("Verificación cancelada", "");
+                btn.disabled = false;
+            },
+
+            onError: (err) => {
+                addDebugLog("Error en Persona: " + err.message, "error");
+                mostrarError("Error durante la verificación", err.message);
+                btn.disabled = false;
+            }
+        });
+
+    } catch (err) {
+        addDebugLog("ERROR: " + err.message, "error");
+        mostrarError("Error", err.message);
+        btn.disabled = false;
+    }
+}
+
+
+// ============================
+// MOSTRAR RESULTADOS
+// ============================
+function mostrarResultadoDesdeBackend(data) {
+    const resultBox = document.getElementById("resultBox");
+    let status = data?.data?.attributes?.status ?? "unknown";
+
+    let titulo = "";
+    let clase = "info";
+
+    if (status === "approved") { titulo = "✅ Verificación Aprobada"; clase = "success"; }
+    else if (status === "declined") { titulo = "❌ Verificación Rechazada"; clase = "error"; }
+    else { titulo = "⏳ Estado: " + status; clase = "info"; }
+
+    resultBox.className = `result-box ${clase}`;
+    resultBox.style.display = "block";
+
+    resultBox.innerHTML = `
+        <strong>${titulo}</strong>
+        Inquiry ID: ${GLOBAL_INQUIRY_ID}
+    `;
+
+    document.getElementById("btnVerificar").disabled = false;
+}
+
+function mostrarError(titulo, mensaje) {
+    const resultBox = document.getElementById("resultBox");
+    resultBox.className = "result-box error";
+    resultBox.style.display = "block";
+    resultBox.innerHTML = `<strong>${titulo}</strong> ${mensaje}`;
+}
+
+addDebugLog("Página cargada correctamente", "success");
+</script>
+
+</body>
+</html>

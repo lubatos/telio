@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Telio Live Trip</title>
+
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+
+  <style>
+    body { margin:0; padding:0; font-family: Arial; }
+    #map { width: 100vw; height: 100vh; }
+    #header {
+      position:absolute;
+      top:0; left:0;
+      background:white;
+      padding:10px;
+      z-index:999;
+      border-bottom:2px solid #bbb;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="header">
+  <b>Seguimiento en Vivo</b><br>
+  Token:
+  <span id="token"></span>
+</div>
+
+<div id="map"></div>
+
+<script>
+  mapboxgl.accessToken = "TU_TOKEN_MAPBOX";
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get("t");
+  document.getElementById("token").innerText = token;
+
+  const map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/streets-v12",
+    center: [-68.15, -16.50],
+    zoom: 13
+  });
+
+  let marker = null;
+
+  setInterval(async () => {
+    const pos = await fetch(`/api/maps/share/loc/${token}`)
+            .then(r => r.json())
+            .catch(() => null);
+
+    if (!pos) return;
+
+    const lng = pos[1];
+    const lat = pos[0];
+
+    if (!marker) {
+      marker = new mapboxgl.Marker({color:"red"}).setLngLat([lng, lat]).addTo(map);
+    } else {
+      marker.setLngLat([lng, lat]);
+    }
+
+    map.setCenter([lng,lat]);
+
+  }, 2000);
+</script>
+
+</body>
+</html>

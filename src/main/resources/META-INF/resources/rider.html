@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Telio Rider</title>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+
+    <style>
+        body { margin:0; padding:0; font-family: Arial; }
+        #map { width: 100vw; height: 90vh; }
+        #panel { padding:10px; background:white; border-bottom:2px solid #ddd; }
+        .alert { background:#ffd200; padding:10px; font-weight:bold; display:none; }
+    </style>
+</head>
+
+<body>
+
+<div id="panel">
+    <h2>Rider - Seguimiento del Conductor</h2>
+
+    Driver ID:
+    <input id="driverId" value="driver123">
+
+    <button onclick="startFollow()">▶ Seguir</button>
+
+    <div id="arrivalAlert" class="alert">🚗 El conductor está cerca del destino</div>
+</div>
+
+<div id="map"></div>
+
+<script>
+    mapboxgl.accessToken = "pk.eyJ1IjoidGVsaW9yaWRlcyIsImEiOiJjbWZxdW11dngwMm90MmxwenU5emNhMHN0In0.g_d23QobmXqFyUElkDl5ag";
+
+    const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [-68.15, -16.50],
+        zoom: 13
+    });
+
+    let marker = null;
+    let interval = null;
+
+    function startFollow() {
+        const driverId = document.getElementById("driverId").value;
+
+        interval = setInterval(async () => {
+            const pos = await fetch(`/api/maps/driver/location/${driverId}`)
+                .then(r => r.json())
+                .catch(() => null);
+
+            if (!pos) return;
+
+            const lng = pos[1];
+            const lat = pos[0];
+
+            if (!marker) {
+                marker = new mapboxgl.Marker({color:"black"}).setLngLat([lng,lat]).addTo(map);
+            } else {
+                marker.setLngLat([lng,lat]);
+            }
+
+            map.setCenter([lng,lat]);
+
+            // CHECK PROXIMITY
+            const near = await fetch(`/api/maps/near?lat=${lat}&lng=${lng}`)
+                .then(r => r.json());
+
+            if (near.near === true) {
+                document.getElementById("arrivalAlert").style.display = "block";
+            }
+
+        }, 2000);
+    }
+</script>
+
+</body>
+</html>

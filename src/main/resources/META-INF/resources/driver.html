@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Telio Driver Live</title>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+
+    <style>
+        body { margin:0; padding:0; font-family: Arial; }
+        #map { width: 100vw; height: 90vh; }
+        #panel {
+            padding:10px;
+            background:white;
+            border-bottom:2px solid #ddd;
+        }
+        button { margin:5px; padding:10px; }
+    </style>
+</head>
+
+<body>
+
+<div id="panel">
+    <h2>Driver Tracking</h2>
+
+    <label>Driver ID:</label>
+    <input id="driverId" value="driver123">
+
+    <button onclick="toggleLive()">▶ Enviar ubicación</button>
+    <button onclick="generateShare()">🔗 Compartir viaje</button>
+
+    <div id="shareLink" style="margin-top:10px;font-weight:bold;"></div>
+
+    <br>
+
+    <label>Estado:</label>
+    <select id="stateSelect" onchange="updateState()">
+        <option value="ONLINE">ONLINE</option>
+        <option value="ON_PICKUP">ON_PICKUP</option>
+        <option value="ON_TRIP">ON_TRIP</option>
+        <option value="FINISHED">FINISHED</option>
+        <option value="OFFLINE">OFFLINE</option>
+    </select>
+
+</div>
+
+<div id="map"></div>
+
+<script>
+    // --- CONFIG MAPBOX ---
+    mapboxgl.accessToken = "pk.eyJ1IjoidGVsaW9yaWRlcyIsImEiOiJjbWZxdW11dngwMm90MmxwenU5emNhMHN0In0.g_d23QobmXqFyUElkDl5ag";
+
+    const map = new mapboxgl.Map({
+        container: "map",
+        style: "mapbox://styles/mapbox/streets-v12",
+        center: [-68.15, -16.50],
+        zoom: 13
+    });
+
+    let socket = null;
+    let tracking = false;
+    let marker = null;
+
+    function toggleLive() {
+        if (!tracking) startLive();
+        else stopLive();
+    }
+
+    function startLive() {
+        const driverId = document.getElementById("driverId").value;
+
+        socket = new WebSocket("ws://localhost:8080/ws/location");
+
+        socket.onopen = () => {
+            console.log("WS Conectado");
+            tracking = true;
+        };
+
+        socket.onclose = () => {
+            console.log("WS cerrado");
+            tracking = false;
+        };
+
+        watchPosition(driverId);
+    }
+
+    function stopLive() {
+        if (socket) socket.close();
+        tracking = false;
+    }
+
+    function watchPosition(driverId) {
+        navigator.geolocation.watchPosition(pos => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+
+            // DIBUJAR EN MAPA
+            if (!marker) {
+                marker = new mapboxgl.Marker({color:"blue"})
+                    .setLngLat([lng, lat])
+                    .addTo(map);
+            } else {
+                marker.setLngLat([lng, lat]);
+            }
+
+            // ENVIAR A BACKEND WS
+            if (tracking && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    driverId: driverId,
+                    lat: lat,
+                    lng: lng
+                }));
+            }
+
+        }, err => console.log(err), {enableHighAccuracy:true});
+    }
+
+    async function generateShare() {
+        const driverId = document.getElementById("driverId").value;
+
+        const res = await fetch(`/api/maps/share/${driverId}`, { method:"POST" });
+        const data = await res.json();
+
+        document.getElementById("shareLink").innerHTML =
+            `🔗 Link: <a href="${data.shareUrl}" target="_blank">${data.shareUrl}</a>`;
+    }
+
+    async function updateState() {
+        const driverId = document.getElementById("driverId").value;
+        const state = document.getElementById("stateSelect").value;
+
+        await fetch(`/api/maps/driver/state/${driverId}/${state}`, {method:"POST"});
+        alert("Estado actualizado: " + state);
+    }
+
+</script>
+
+</body>
+</html>
