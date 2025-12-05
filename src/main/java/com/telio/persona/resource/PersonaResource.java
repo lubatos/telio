@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.telio.persona.dto.StartInquiryResponse;
 import com.telio.persona.service.PersonaClientService;
 import com.telio.persona.service.PersonaService;
+import com.telio.persona.service.PersonaWebhookService;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
 import jakarta.ws.rs.*;
@@ -25,6 +26,12 @@ public class PersonaResource {
     PersonaService personaService;
     @Inject
     PersonaClientService personaClient;
+    @Inject
+    PersonaWebhookService serviceWebHook;
+
+
+
+
     /** 1) Frontend llama para iniciar el flujo */
     @GET
     @Path("/start")
@@ -61,7 +68,7 @@ public class PersonaResource {
 
     /** 2) Webhook de Persona */
     @POST
-    @Path("/webhook")
+    @Path("/blsmck_webhook")
     public void webhook(JsonNode body) {
         System.out.println("WEBHOOK");
         personaService.processWebhook(body);
@@ -74,4 +81,24 @@ public class PersonaResource {
 
         return personaService.getStatus(inquiryId);
     }
+
+
+
+    @POST
+    @Path("/webhook")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response handleWebhook(
+            String body,
+            @HeaderParam("Persona-Signature") String signature) {
+
+        if (!serviceWebHook.validateSignature(body, signature)) {
+            return Response.status(401).entity("Invalid signature").build();
+        }
+
+        serviceWebHook.processEvent(body);
+
+        return Response.ok().build();
+    }
+
 }
