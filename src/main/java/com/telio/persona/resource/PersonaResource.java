@@ -7,7 +7,6 @@
 package com.telio.persona.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.telio.persona.dto.StartInquiryResponse;
 import com.telio.persona.service.PersonaClientService;
 import com.telio.persona.service.PersonaService;
 import com.telio.persona.service.PersonaWebhookService;
