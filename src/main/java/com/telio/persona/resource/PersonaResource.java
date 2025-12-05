@@ -15,6 +15,9 @@ import jakarta.json.Json;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import kong.unirest.JsonPatchItem;
+
+import java.util.Map;
 
 @Path("/persona")
 @Produces(MediaType.APPLICATION_JSON)
@@ -40,23 +43,46 @@ public class PersonaResource {
             JsonNode result = personaClient.createInquiry();
             String inquiryId = result.get("data").get("id").asText();
 
+            System.out.println("================inquiryId -> "+inquiryId);
+
             return Response.ok(
-                    Json.createObjectBuilder()
-                            .add("inquiryId", inquiryId)
-                            .build()
+                    Map.of("inquiryId", inquiryId)
             ).build();
 
         } catch (Exception e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(
-                            Json.createObjectBuilder()
-                                    .add("error", true)
-                                    .add("message", e.getMessage())
-                                    .build()
-                    )
+                    .entity(Map.of(
+                            "error", true,
+                            "message", e.getMessage()
+                    ))
                     .build();
         }
     }
+//    @GET
+//    @Path("/start")
+//    @Produces(MediaType.APPLICATION_JSON)
+//    public Response startInquiry() {
+//        try {
+//            JsonNode result = personaClient.createInquiry();
+//            String inquiryId = result.get("data").get("id").asText();
+//            System.out.println("================inquiryId -> "+inquiryId);
+//            return Response.ok(
+//                    Json.createObjectBuilder()
+//                            .add("inquiryId", inquiryId)
+//                            .build()
+//            ).build();
+//
+//        } catch (Exception e) {
+//            return Response.status(Response.Status.BAD_REQUEST)
+//                    .entity(
+//                            Json.createObjectBuilder()
+//                                    .add("error", true)
+//                                    .add("message", e.getMessage())
+//                                    .build()
+//                    )
+//                    .build();
+//        }
+//    }
 
 //    @GET
 //    @Path("/start")
@@ -67,11 +93,32 @@ public class PersonaResource {
 
     /** 2) Webhook de Persona */
     @POST
-    @Path("/blsmck_webhook")
-    public void webhook(JsonNode body) {
-        System.out.println("WEBHOOK");
-        personaService.processWebhook(body);
+    @Path("/webhook")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response handleWebhook(
+            String body,
+            @HeaderParam("Persona-Signature") String signature) {
+        boolean vall = serviceWebHook.validateSignature(body, signature);
+        System.out.println("VAL = "+vall);
+        if (!serviceWebHook.validateSignature(body, signature)) {
+            System.out.println("entro if");
+            return Response.status(401).entity("Invalid signature").build();
+        }
+        System.out.println("==================================");
+        System.out.println("body ======"+body);
+        System.out.println("==================================");
+
+        serviceWebHook.processEvent(body);
+
+        return Response.ok().build();
     }
+//    @POST
+//    @Path("/blsmck_webhook")
+//    public void webhook(JsonNode body) {
+//        System.out.println("WEBHOOK");
+//        personaService.processWebhook(body);
+//    }
 
     /** 3) El frontend consulta estado del inquiry */
     @GET
@@ -79,25 +126,6 @@ public class PersonaResource {
     public JsonNode getInquiryStatus(@PathParam("inquiryId") String inquiryId) throws Exception {
 
         return personaService.getStatus(inquiryId);
-    }
-
-
-
-    @POST
-    @Path("/webhook")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response handleWebhook(
-            String body,
-            @HeaderParam("Persona-Signature") String signature) {
-
-        if (!serviceWebHook.validateSignature(body, signature)) {
-            return Response.status(401).entity("Invalid signature").build();
-        }
-
-        serviceWebHook.processEvent(body);
-
-        return Response.ok().build();
     }
 
 }

@@ -34,6 +34,7 @@ public class PersonaWebhookService {
         if (envSecret != null && !envSecret.isEmpty()) {
             return envSecret;
         }
+        System.out.println("=============="+configSecret);
         return configSecret;
     }
 
@@ -43,14 +44,15 @@ public class PersonaWebhookService {
     public boolean validateSignature(String body, String signature) {
         try {
             String secret = getSecret();
-
+            System.out.println("SIGNATURE "+body);
             Mac mac = Mac.getInstance("HmacSHA256");
+            System.out.println("SIGNATURE2 "+signature);
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-
+            System.out.println("SIGNATURE3");
             String expected = Base64.getEncoder().encodeToString(
                     mac.doFinal(body.getBytes(StandardCharsets.UTF_8))
             );
-
+            System.out.println("SIGNATURE4 expected "+expected);
             return expected.equals(signature);
 
         } catch (Exception e) {

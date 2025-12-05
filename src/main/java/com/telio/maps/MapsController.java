@@ -47,8 +47,9 @@ public class MapsController {
     @POST
     @Path("/route")
     public Response route(JsonObject body) {
-        System.out.println("-----------  1"+body.toString());
+        System.out.println("-----------  calculado ruta en MAPBOX"+body.toString());
         JsonObject result = mapsService.computeRoute(body);
+        System.out.println("RESULT"+result);
         return Response.ok(result).build();
     }
 
