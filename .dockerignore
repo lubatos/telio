@@ -1,5 +1,15 @@
+# Ignora TODO
 *
+
+# Pero incluye lo necesario para construir con Maven Wrapper
+!mvnw
+!mvnw.cmd
+!.mvn/**
+!pom.xml
+!src/**
+
+# Y todo lo que Quarkus necesita para fast/jar/nativer runner
 !target/*-runner
 !target/*-runner.jar
-!target/lib/*
-!target/quarkus-app/*
+!target/lib/**
+!target/quarkus-app/**
